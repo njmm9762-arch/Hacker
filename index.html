@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>System HUD</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{
+  --bg:#03060b; --neon:#00ff9a; --dim:#0b2a22; --warn:#00c3ff;
+}
+body{margin:0;height:100vh;overflow:hidden;background:var(--bg);color:var(--neon);
+  font-family: "JetBrains Mono","Courier New",monospace}
+.light{--bg:#f4f6f8;--neon:#0a0a0a;--dim:#dfe6ea}
+.settings{position:fixed;top:10px;right:10px;z-index:10}
+.settings .dot{margin-right:6px}
+.settings button{background:transparent;border:1px solid currentColor;color:inherit;
+  padding:6px 10px;margin-left:6px;cursor:pointer}
+#wrap{position:absolute;inset:0}
+canvas{position:absolute;inset:0}
+.ui{position:absolute;inset:0;padding:64px 24px;pointer-events:none}
+.panel{max-width:420px;pointer-events:auto}
+input,button{background:transparent;color:var(--neon);border:1px solid currentColor;
+  padding:10px 12px;margin:6px 0;width:100%}
+button{cursor:pointer}
+.status{margin:10px 0;letter-spacing:.5px}
+pre{height:48vh;overflow:hidden;font-size:13px;opacity:.9}
+.hidden{display:none}
+.shake{animation:shake .14s infinite}
+@keyframes shake{
+  0%{transform:translate(0)}25%{transform:translate(2px,1px)}
+  50%{transform:translate(-2px,0)}75%{transform:translate(1px,-1px)}
+}
+.fade{animation:fade 1s both}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+</style>
+</head>
+<body class="dark">
+<div class="settings">
+  <span class="dot">•</span>
+  <button id="langBtn">Change Language</button>
+  <button id="colorBtn">Change Colors</button>
+</div>
+
+<div id="wrap">
+  <canvas id="bg"></canvas>
+  <canvas id="fx"></canvas>
+  <div class="ui">
+    <!-- STEP 1 -->
+    <div class="panel fade" id="step1">
+      <input placeholder="Phone number or Email (demo)">
+      <button id="go1">Next</button>
+      <div class="status" id="s1"></div>
+      <pre id="code1"></pre>
+    </div>
+    <!-- STEP 2 -->
+    <div class="panel hidden fade" id="step2">
+      <input placeholder="Enter code dd.ch">
+      <button id="go2">Confirm</button>
+      <pre id="code2"></pre>
+    </div>
+    <!-- STEP 3 -->
+    <div class="panel hidden fade" id="step3">
+      <div class="status">Please wait… Loading data</div>
+      <pre id="code3"></pre>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== CANVAS HUD (procedural “images” from code) ===== */
+const bg = document.getElementById('bg'), fx = document.getElementById('fx');
+const b = bg.getContext('2d'), f = fx.getContext('2d');
+function resize(){bg.width=fx.width=innerWidth; bg.height=fx.height=innerHeight}
+addEventListener('resize',resize); resize();
+
+let t=0;
+function hud(){
+  t+=0.01;
+  b.clearRect(0,0,bg.width,bg.height);
+  // grid
+  b.globalAlpha=.25;
+  b.strokeStyle=getComputedStyle(document.body).color;
+  b.lineWidth=1;
+  const s=40;
+  for(let x=0;x<bg.width;x+=s){b.beginPath();b.moveTo(x,0);b.lineTo(x,bg.height);b.stroke()}
+  for(let y=0;y<bg.height;y+=s){b.beginPath();b.moveTo(0,y);b.lineTo(bg.width,y);b.stroke()}
+  // radar
+  b.globalAlpha=.6;
+  const cx=bg.width*.75, cy=bg.height*.6, r=Math.min(bg.width,bg.height)*.22;
+  b.beginPath(); b.arc(cx,cy,r,0,Math.PI*2); b.stroke();
+  b.beginPath(); b.arc(cx,cy,r*.66,0,Math.PI*2); b.stroke();
+  b.beginPath(); b.arc(cx,cy,r*.33,0,Math.PI*2); b.stroke();
+  // sweep
+  b.globalAlpha=.9;
+  b.beginPath();
+  b.moveTo(cx,cy);
+  b.arc(cx,cy,r,t,t+.35);
+  b.closePath(); b.fillStyle="rgba(0,255,154,.15)"; b.fill();
+  // panels
+  b.globalAlpha=.8;
+  b.strokeRect(16,16,360,220);
+  b.strokeRect(16,260,360,220);
+  requestAnimationFrame(hud);
+}
+hud();
+
+// FX (scanlines + glitch)
+function fxLoop(){
+  f.clearRect(0,0,fx.width,fx.height);
+  f.globalAlpha=.12;
+  for(let y=0;y<fx.height;y+=3){f.fillRect(0,y,fx.width,1)}
+  if(Math.random()<.04){
+    f.globalAlpha=.25;
+    f.fillRect(Math.random()*fx.width,Math.random()*fx.height,fx.width,2);
+  }
+  requestAnimationFrame(fxLoop);
+}
+fxLoop();
+
+/* ===== Fake code rain ===== */
+function randLine(){
+  const c="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#@$%";
+  let s=""; for(let i=0;i<72;i++) s+=c[Math.random()*c.length|0];
+  return s;
+}
+function rain(el){ el.textContent = randLine()+"\n"+randLine()+"\n"+el.textContent }
+
+/* ===== Audio + TTS ===== */
+function buzz(ms=700){
+  const A=window.AudioContext||webkitAudioContext; const a=new A();
+  const o=a.createOscillator(); o.frequency.value=90; o.connect(a.destination); o.start();
+  setTimeout(()=>o.stop(),ms);
+}
+function speakAR(){
+  const u=new SpeechSynthesisUtterance("الرجاء الانتظار يتم تحميل البيانات");
+  u.lang="ar-SA"; speechSynthesis.speak(u);
+}
+
+/* ===== Steps logic ===== */
+const s1=document.getElementById('step1'), s2=document.getElementById('step2'), s3=document.getElementById('step3');
+const c1=document.getElementById('code1'), c2=document.getElementById('code2'), c3=document.getElementById('code3');
+let run1=false, run2=false, run3=false;
+
+setInterval(()=>{ if(run1){ rain(c1); s1.classList.toggle('shake') }},120);
+setInterval(()=>{ if(run2){ rain(c2); s2.classList.toggle('shake') }},120);
+setInterval(()=>{ if(run3){ rain(c3); s3.classList.toggle('shake') }},120);
+
+document.getElementById('go1').onclick=()=>{
+  run1=true; buzz(); speakAR();
+  setTimeout(()=>{ s1.classList.add('hidden'); s2.classList.remove('hidden'); run2=true; },1200);
+};
+document.getElementById('go2').onclick=()=>{
+  // dd.ch five lines (visual only)
+  c2.textContent =
+`dd.ch:init
+node.sync:OK
+pipe.link:ON
+cache.map:READY
+exec.run:START\n\n` + c2.textContent;
+  buzz(900); speakAR();
+  setTimeout(()=>{ s2.classList.add('hidden'); s3.classList.remove('hidden'); run3=true; },1200);
+};
+
+/* ===== Settings ===== */
+document.getElementById('colorBtn').onclick=()=>document.body.classList.toggle('light');
+document.getElementById('langBtn').onclick=()=>{
+  document.documentElement.lang = document.documentElement.lang==="en"?"ar":"en";
+};
+</script>
+</body>
+</html>
